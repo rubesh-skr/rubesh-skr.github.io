@@ -1,0 +1,29 @@
+Title: LangGraph: Concepts and Patterns Every AI Engineer Should Know
+Date: 2026-07-21
+Category: GenAI
+Tags: GenAI, LLM, LangGraph, LangChain, AI-agents, multi-agent, workflows, graph, stateful
+Slug: langgraph-concepts-patterns-every-ai-engineer-should-know
+
+Building AI systems that go beyond a single prompt-response cycle requires orchestration. LangGraph gives you a way to model that orchestration as a graph — nodes that do work, edges that decide what happens next, and state that persists across every step. These are the 8 concepts that actually matter when working with LangGraph.
+
+## The 8 Concepts
+
+**1. StateGraph** — The core building block. A StateGraph is a directed graph where each node represents a unit of work (a function, an LLM call, a tool invocation) and the edges define how execution flows between them. You define a shared state schema upfront — a TypedDict that all nodes read from and write to. Every node receives the current state, does its work, and returns a partial update. LangGraph merges that update back into the graph state. This structure replaces tangled chains of callbacks with an explicit, inspectable execution graph.
+
+**2. Nodes** — A node is just a Python function. It takes the current state as input and returns a dictionary of updates to apply to that state. Nodes can call LLMs, run tools, parse results, query databases, or do any other computation. There are no constraints on what a node does internally — the only contract is the input/output signature. This simplicity is intentional: complex agent logic lives inside nodes, not in the framework.
+
+**3. Edges** — Edges connect nodes and control flow. A normal edge always sends execution from one node to the next. A conditional edge evaluates a function against the current state and routes to different nodes based on the result. This is where branching logic lives — if the LLM says to call a tool, go to the tool node; if it says to finish, go to the end. Conditional edges are what make LangGraph agents capable of loops, retries, and dynamic routing rather than fixed linear pipelines.
+
+**4. State** — State is a TypedDict that travels through every node in the graph. Each field represents something the agent needs to track: messages, intermediate results, tool outputs, iteration counts, flags. Nodes update only the fields they care about, and LangGraph applies those partial updates to the running state. The state is the memory of the graph — it's what allows a multi-step workflow to carry context forward from the first node to the last without passing arguments manually through every function call.
+
+**5. Checkpointing and Persistence** — LangGraph has a built-in checkpointing system. After each node executes, the full state is saved to a configurable backend — in-memory, SQLite, or Postgres. This means a graph can be paused mid-execution, resumed later, or replayed from any prior checkpoint. For human-in-the-loop workflows, this is essential: you can halt execution, wait for user input, and continue from exactly where you left off. It also gives you a complete execution trace for debugging without adding any instrumentation code.
+
+**6. Human-in-the-Loop** — LangGraph supports interrupting a graph at any node and waiting for external input before continuing. You mark a node as an interrupt point, the graph pauses after reaching it, and your application layer can inspect the state, collect user feedback, inject updates, and then resume. This pattern covers use cases like approval workflows, ambiguity resolution, and confirmation steps before destructive actions. The checkpoint system ensures no state is lost during the pause, regardless of how long the interruption lasts.
+
+**7. Multi-Agent Graphs** — LangGraph handles multi-agent architectures through subgraphs. A node in one graph can itself be an entire compiled graph, letting you compose specialized agents into a larger system. The common pattern is a supervisor graph that routes tasks to specialist subgraphs — a research agent, a code execution agent, a summarization agent — and aggregates their outputs. Each subgraph maintains its own state while the parent graph coordinates the overall workflow. This composability is what makes LangGraph suitable for complex, production-grade agent systems rather than single-purpose scripts.
+
+**8. ToolNode and ReAct Pattern** — LangGraph ships with a ToolNode that handles the mechanics of tool calling: parsing LLM tool call requests, executing the corresponding functions, and writing results back to state. Pair a ToolNode with conditional edges that check whether the LLM returned a tool call or a final answer, and you get the ReAct loop (Reason + Act) with minimal boilerplate. The loop runs until the LLM decides it has enough information to respond — no manual loop management, no fragile string parsing. This is the foundation of most LangGraph-based agents in production today.
+
+## The Pattern That Connects All of This
+
+LangGraph is not an abstraction over LLM calls — it's a runtime for stateful, multi-step workflows. The graph structure gives you explicit control flow. State gives you shared memory across steps. Checkpointing gives you durability and debuggability. Human-in-the-loop gives you oversight at critical decision points. Multi-agent composition gives you scale. These aren't independent features you pick from — they compound. A production agent built on LangGraph typically uses all of them: a StateGraph with conditional edges driving a ReAct loop, ToolNode handling execution, checkpoints enabling pause and resume, and subgraphs encapsulating specialized capabilities. Start with a single StateGraph, a ToolNode, and basic conditional edges. Add checkpointing early — it costs almost nothing and saves significant debugging time later. Reach for subgraphs only when a single agent's scope becomes genuinely too broad to manage as one graph.
